@@ -1,6 +1,6 @@
 -- ===== Consultas analíticas (tablero de trazabilidad) =====
 
--- A1. Alcance y letalidad por departamento
+-- A1. Alcance y letalidad por departamento 
 SELECT nombre_departamento, COUNT(*) AS casos,
        COUNT_IF(fecha_muerte IS NOT NULL OR estado = 'fallecido') AS fallecidos,
        ROUND(100 * fallecidos / casos, 2) AS letalidad_pct
