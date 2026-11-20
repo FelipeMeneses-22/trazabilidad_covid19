@@ -19,3 +19,14 @@ s3,subir_gold,5,1.267,4
 s3,subir_bronze_csv,,324.609,
 s3,subir_silver,47,144.061,0
 s3,subir_gold,5,1.262,4
+snowflake,carga_gold_indicadores_depto_mes,1607,2.848,564
+snowflake,carga_gold_tiempo_deteccion,36,2.021,18
+snowflake,carga_gold_r_efectivo_mes,47,3.056,15
+snowflake,carga_gold_alcance_por_origen,2201,2.159,1019
+snowflake,carga_gold_nodos_criticos,500,2.159,232
+snowflake,carga_fact_casos,6390971,86.231,74115
+grafo,leer_silver,975491,6.981,139733
+grafo,generar_aristas,975491,7.664,127274
+neo4j,cargar_dimensiones,,5.337,
+neo4j,cargar_casos,975491,209.862,4648
+neo4j,cargar_aristas,432744,50.456,8577

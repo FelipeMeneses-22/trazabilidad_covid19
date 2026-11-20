@@ -1,4 +1,4 @@
-"""Carga el grafo en Neo4j desde data/grafo/*.csv.
+"""Carga el grafo en Neo4j desde data/grafo/*.csv, leyendo por bloques (sirve para millones de filas).
 
 Modelo:  (:Caso)-[:UBICADO_EN]->(:Municipio)-[:PERTENECE_A]->(:Departamento)
          (:Caso)-[:CONTAGIO_A {dias}]->(:Caso)
@@ -14,6 +14,7 @@ from src.comunes.config import GRAFO_DIR, NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER
 from src.comunes.metricas import medir
 
 LOTE = 10_000
+TIPOS = {"cod_municipio": str, "cod_departamento": str}
 
 INDICES = [
     "CREATE CONSTRAINT caso_id IF NOT EXISTS FOR (c:Caso) REQUIRE c.id IS UNIQUE",
@@ -43,41 +44,53 @@ MERGE (a)-[x:CONTAGIO_A]->(b) SET x.dias = r.dias
 """
 
 
-def registros(df: pd.DataFrame):
+def registros(df: pd.DataFrame, enteros=()):
+    """DataFrame -> lista de dicts con tipos nativos (NaN -> None, enteros como int)."""
+    df = df.copy()
+    for c in enteros:
+        df[c] = pd.array(df[c], dtype="Int64")
     df = df.astype(object).where(df.notna(), None)
     return df.to_dict("records")
 
 
-def en_lotes(sesion, consulta, df, enteros=()):
-    for c in enteros:
-        df[c] = pd.array(df[c], dtype="Int64")
-    filas = registros(df)
-    for i in range(0, len(filas), LOTE):
-        sesion.run(consulta, rows=filas[i:i + LOTE]).consume()
-    return len(filas)
+def cargar_por_bloques(sesion, ruta, consulta, columnas, enteros=(), etiqueta=""):
+    total = 0
+    for bloque in pd.read_csv(ruta, usecols=columnas, dtype=TIPOS, chunksize=LOTE):
+        sesion.run(consulta, rows=registros(bloque[columnas], enteros)).consume()
+        total += len(bloque)
+        if total % (LOTE * 20) == 0:
+            print(f"  {etiqueta}: {total:,}")
+    return total
+
+
+def cargar(sesion, grafo_dir=GRAFO_DIR, limpiar=False):
+    nodos, aristas = grafo_dir / "nodos_caso.csv", grafo_dir / "aristas_contacto.csv"
+    if limpiar:
+        sesion.run("MATCH (n) CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 50000 ROWS").consume()
+    for q in INDICES:
+        sesion.run(q).consume()
+
+    with medir("neo4j", "cargar_dimensiones"):
+        dims = pd.read_csv(nodos, dtype=TIPOS, usecols=["cod_departamento", "nombre_departamento",
+                                                         "cod_municipio", "nombre_municipio"]).drop_duplicates()
+        sesion.run(Q_DIMS, rows=registros(dims)).consume()
+    with medir("neo4j", "cargar_casos") as m:
+        m["filas"] = cargar_por_bloques(
+            sesion, nodos, Q_CASOS,
+            ["id_caso", "fecha_notificacion", "edad", "sexo", "estado", "tipo_contagio", "cod_municipio"],
+            enteros=("id_caso", "edad"), etiqueta="casos")
+    with medir("neo4j", "cargar_aristas") as m:
+        m["filas"] = cargar_por_bloques(
+            sesion, aristas, Q_ARISTAS, ["origen_id", "destino_id", "dias"],
+            enteros=("origen_id", "destino_id", "dias"), etiqueta="aristas")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limpiar", action="store_true", help="borra todo el grafo antes de cargar")
     args = ap.parse_args()
-
-    nodos = pd.read_csv(GRAFO_DIR / "nodos_caso.csv", dtype={"cod_municipio": str, "cod_departamento": str})
-    aristas = pd.read_csv(GRAFO_DIR / "aristas_contacto.csv")
-
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)) as driver, driver.session() as s:
-        if args.limpiar:
-            s.run("MATCH (n) CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 50000 ROWS").consume()
-        for q in INDICES:
-            s.run(q).consume()
-        with medir("neo4j", "cargar_dimensiones"):
-            dims = nodos[["cod_departamento", "nombre_departamento", "cod_municipio", "nombre_municipio"]].drop_duplicates()
-            en_lotes(s, Q_DIMS, dims)
-        with medir("neo4j", "cargar_casos") as m:
-            m["filas"] = en_lotes(s, Q_CASOS, nodos[["id_caso", "fecha_notificacion", "edad", "sexo", "estado",
-                                                    "tipo_contagio", "cod_municipio"]].copy(), enteros=("id_caso", "edad"))
-        with medir("neo4j", "cargar_aristas") as m:
-            m["filas"] = en_lotes(s, Q_ARISTAS, aristas.copy(), enteros=("origen_id", "destino_id", "dias"))
+        cargar(s, limpiar=args.limpiar)
         r = s.run("MATCH (c:Caso) WITH count(c) AS casos MATCH ()-[x:CONTAGIO_A]->() RETURN casos, count(x) AS aristas").single()
         print(f"Neo4j: {r['casos']:,} casos, {r['aristas']:,} relaciones CONTAGIO_A")
 
