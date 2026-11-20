@@ -1,0 +1,40 @@
+.env
+data/raw/*
+data/lake/
+data/grafo/
+resultados/*.json
+__pycache__/
+.venv/
+*.pyc
+
+# Secretos y credenciales
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.key
+rsa_key*
+*accessKeys*.csv
+.snowflake/
+.aws/
+
+# Datos (pesados y personales): toda la carpeta data
+data/
+
+# Salidas generadas
+resultados/*.json
+spark-warehouse/
+metastore_db/
+derby.log
+*.crc
+*.parquet
+
+# Python y editor
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.vscode/
+.idea/
