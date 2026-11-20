@@ -1,6 +1,6 @@
 componente,etapa,filas,segundos,filas_por_seg
 spark,limpieza_csv_a_parquet,6390971,151.836,42091
-grafo,leer_silver,127765,7.264,17588
+grafo,leer_silver,127765,7.264,17588 
 grafo,generar_aristas,127765,1.15,111137
 spark,gold_indicadores_depto_mes,1607,32.952,49
 spark,gold_tiempo_deteccion,36,19.503,2
