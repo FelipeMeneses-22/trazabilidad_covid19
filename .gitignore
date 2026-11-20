@@ -8,7 +8,6 @@ __pycache__/
 *.pyc
 
 # Secretos y credenciales
-.env
 .env.*
 !.env.example
 *.pem
@@ -20,7 +19,7 @@ rsa_key*
 .aws/
 
 # Datos (pesados y personales): toda la carpeta data
-data/
+data/*
 
 # Salidas generadas
 resultados/*.json
